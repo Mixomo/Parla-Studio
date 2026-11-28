@@ -122,6 +122,9 @@ class DatasetPage(QWidget):
         self.sw_fill = switch_row(c, "Keep fillers [UM] [UH]", False)
         self.sw_hall = switch_row(c, "Mitigate hallucinations (slower)", True)
         self.sw_norm = switch_row(c, "Normalize internally before processing", True)
+        self.sw_pre = switch_row(c, "Clips already cut: only transcribe", False)
+        self.sw_pre.setToolTip("Each file is used whole as one clip, as you cut it: it is only transcribed, without "
+                               "trimming, segmentation, alignment or SAVA")
         self.sw_align = switch_row(c, "Align words (more precise edges)", True)
         self.sw_sava = switch_row(c, "Detect pauses with SAVA", False)
         self.sw_sava.setToolTip("SAVA (voice activity) finds the real silences to cut at. Turn it off when music or "
@@ -155,6 +158,7 @@ class DatasetPage(QWidget):
         self.speaker = LineEdit()
         self.speaker.setText("speaker")
         c.addWidget(self.speaker)
+        self.sw_pre.checkedChanged.connect(self._pre_cut_changed)
         # the speaker name goes with the speakers option: hidden while it is off
         self.sw_diar.checkedChanged.connect(lambda on: (self.speaker_lbl.setVisible(on), self.speaker.setVisible(on)))
         self.speaker_lbl.setVisible(self.sw_diar.isChecked())
@@ -329,6 +333,15 @@ class DatasetPage(QWidget):
         if hasattr(self, "include_all_btn"):
             self.include_all_btn.setEnabled(not busy and any(not c.keep for c in self.clips))
 
+    def _pre_cut_changed(self, on: bool) -> None:
+        """Pre-cut clips are only transcribed: the trimming, alignment and SAVA controls do not apply."""
+        self.sw_align.setEnabled(not on)
+        self.aligner_cb.setEnabled(not on and self.sw_align.isChecked())
+        self.aligner_hint.setEnabled(not on and self.sw_align.isChecked())
+        self.sw_sava.setEnabled(not on)
+        for s in (self.s_min, self.s_max, self.s_pause, self.s_pad):
+            s.setEnabled(not on)
+
     def _params(self) -> dataset.DatasetParams:
         return dataset.DatasetParams(
             language=models.CW_LANGUAGES[self.lang.currentText()], hallucination_mitigation=self.sw_hall.isChecked(),
@@ -337,7 +350,7 @@ class DatasetPage(QWidget):
             isolate=self.sw_iso.isChecked(), engine=self.sep.engine_key(), sep_block_s=self.sep.block_s(), diarize=self.sw_diar.isChecked(), verbatim=self.sw_verb.isChecked(), keep_fillers=self.sw_fill.isChecked(),
             min_s=self.s_min.get(), max_s=max(self.s_max.get(), self.s_min.get() + 0.5), min_pause_s=self.s_pause.get(),
             pad_s=self.s_pad.get(), out_sr=int(self.out_sr.currentText()), min_word_prob=self.s_conf.get(),
-            speaker=self.speaker.text().strip() or "speaker")
+            speaker=self.speaker.text().strip() or "speaker", pre_cut=self.sw_pre.isChecked())
 
     # ------------------------------------------------------------ files
     def add_files(self, files: list[str] | None = None) -> None:

@@ -687,6 +687,28 @@ def test_dataset_without_sava_cuts_at_the_timestamps_pauses(tmp_path, monkeypatc
     assert all(c.keep for c in clips)
 
 
+def test_dataset_pre_cut_clips_are_only_transcribed(tmp_path, monkeypatch):
+    sr = 16000
+    words = _talk(n=96)                                                              # ~33 s: would be several clips
+    dur = words[-1].end + 0.5
+    x = (0.1 * np.sin(np.arange(int(dur * sr)) / 7)).astype(np.float32)[:, None]
+    def boom(*a, **k):
+        raise AssertionError("pre-cut clips use no aligner or SAVA")
+    monkeypatch.setattr(models, "speech_probability", boom)
+    from parla_studio.core import aligner
+    monkeypatch.setattr(aligner, "align", boom)
+    monkeypatch.setattr(models, "transcribe", lambda *a, **k: ("", [models.Word(w.text, w.start, w.end) for w in words]))
+    prm = dataset.DatasetParams(language="es", isolate=False, align=True, use_sava=True, write_log=False,
+                                pre_cut=True, max_s=12.0)
+    clips, src = dataset.build_clips(tmp_path / "a.wav", prm, lv.Ctx(), audio=(x, sr))
+    assert len(clips) == 1 and (clips[0].start, clips[0].end) == (0.0, pytest.approx(dur))
+    assert clips[0].keep and clips[0].words == len(words)                          # not "too long"
+    monkeypatch.setattr(models, "transcribe", lambda *a, **k: ("", []))
+    clips, _ = dataset.build_clips(tmp_path / "a.wav", prm, lv.Ctx(), audio=(x, sr))
+    assert len(clips) == 1 and not clips[0].keep and "no text" in clips[0].reason
+    assert dataset.DatasetParams().pre_cut is False
+
+
 def test_split_clip_at_a_point(tmp_path):
     sr = 16000
     words = _talk(n=16)

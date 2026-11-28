@@ -658,6 +658,8 @@ ES = {
     'Merged {} clips: {}-{} s ({} s)': 'Unidos {} clips: {}-{} s ({} s)',
     'Show and keep only the clips of this speaker': 'Mostrar y conservar solo los clips de este hablante',
     'Detect pauses with SAVA': 'Detectar pausas con SAVA',
+    'Clips already cut: only transcribe': 'Clips ya cortados: solo transcribir',
+    'Each file is used whole as one clip, as you cut it: it is only transcribed, without trimming, segmentation, alignment or SAVA': 'Cada archivo se usa entero como un clip, tal como lo cortaste: solo se transcribe, sin recorte, segmentación, alineación ni SAVA',
     'SAVA (voice activity) finds the real silences to cut at. Turn it off when music or effects stay under the voice: pauses are then taken from the word timestamps': 'SAVA (actividad de voz) encuentra los silencios reales donde cortar. Desactívalo cuando hay música o efectos bajo la voz: las pausas se toman de los tiempos de las palabras',
     'SAVA off: pauses from the word timestamps, no voice-ratio check': 'SAVA desactivado: pausas según los tiempos de las palabras, sin control de proporción de voz',
     '{}: SAVA off: pauses taken from the word timestamps': '{}: SAVA desactivado: pausas tomadas de los tiempos de las palabras',

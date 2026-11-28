@@ -60,6 +60,8 @@ class DatasetParams:
     aligner: str = "qwen"         # aligner engine (aligner.ALIGNERS); outside its 11 languages it uses MMS
     edge_max_s: float = 0.35      # how far a clip's end may extend following the word's tail
     write_log: bool = True        # diagnostic log (CrisperWhisper words and corrections)
+    pre_cut: bool = False         # the files are already clips cut by the user: each file is one clip, only
+                                  # transcribed (no aligner, no SAVA, no trimming or segmentation)
 
 
 @dataclass
@@ -285,7 +287,9 @@ def analyze_source(path: Path, prm: DatasetParams, ctx: lv.Ctx, store=None,
     for w in words:
         w.end = min(w.end, dur)
     rows = None
-    if prm.align and words:
+    if prm.pre_cut:
+        notes.append("Pre-cut clips: one clip per file, only transcribed (no aligner, SAVA or trimming)")
+    if prm.align and words and not prm.pre_cut:
         from . import aligner
         desc = aligner.describe(prm.aligner, prm.language)
         ctx.log(f"{path.name}: aligning {len(words)} words with {desc}...", 0)
@@ -294,18 +298,19 @@ def analyze_source(path: Path, prm: DatasetParams, ctx: lv.Ctx, store=None,
         ok = sum(r.status == "aligned" for r in rows)
         ctx.log(f"{path.name}: aligner: {ok} of {len(rows)} words corrected against the audio", 0)
     ctx.check()
-    if prm.use_sava:
+    if prm.use_sava and not prm.pre_cut:
         speech = models.speech_probability(mono, sr, ctx.sub(0.85, 0.95))
     else:
         speech = np.ones(int(np.ceil(mono.size / sr / models.SAVA_FRAME_S)) + 1, np.float32)
-        notes.append("SAVA off: pauses from the word timestamps, no voice-ratio check")
-        ctx.log(f"{path.name}: SAVA off: pauses taken from the word timestamps", 0)
+        if not prm.pre_cut:
+            notes.append("SAVA off: pauses from the word timestamps, no voice-ratio check")
+            ctx.log(f"{path.name}: SAVA off: pauses taken from the word timestamps", 0)
     edb, _ = _energy_db(mono, sr)
     word_db = np.array([20 * np.log10(np.sqrt(np.mean(mono[int(w.start * sr):max(int(w.end * sr), int(w.start * sr) + 1)]
                                                       .astype(np.float64) ** 2)) + 1e-9) for w in words])
     src = Source(path, mono, sr, words, speech, edb, word_db)
     src.active, src.quiet = _activity(mono, sr, edb, speech)
-    if not prm.use_sava:
+    if not prm.use_sava or prm.pre_cut:
         src.quiet = None   # no silence mask: segment() uses the pauses between the word timestamps
     src.align_rows, src.notes = rows, notes
     if diar is not None:
@@ -354,10 +359,11 @@ def make_clip(src: Source, start: float, end: float, prm: DatasetParams, text: s
     reasons = []
     if not clip.text:
         reasons.append("no text")
-    if clip.duration < prm.min_s * 0.5:
-        reasons.append("too short")
-    if clip.duration > prm.max_s + 2 * prm.pad_s:
-        reasons.append("too long")
+    if not prm.pre_cut:  # pre-cut clips keep the length the user chose
+        if clip.duration < prm.min_s * 0.5:
+            reasons.append("too short")
+        if clip.duration > prm.max_s + 2 * prm.pad_s:
+            reasons.append("too long")
     if ws and min_prob < prm.min_word_prob:
         reasons.append("low confidence")
     if sr_ratio < prm.min_speech_ratio:
@@ -413,8 +419,10 @@ def merge_clips(src: Source, clips: list[Clip], prm: DatasetParams) -> Clip:
 
 
 def detect_clips(src: Source, prm: DatasetParams) -> list[Clip]:
-    """Automatic clips: word groups cut at the energy minimum of each pause."""
+    """Automatic clips: word groups cut at the energy minimum of each pause. Pre-cut files: the whole file."""
     words, total, hop_s = src.words, src.duration, 0.01
+    if prm.pre_cut:
+        return [make_clip(src, 0.0, total, prm, _clean_text(words, prm.keep_fillers))]
     act = src.active
     gaps = None
     src.pause_from_mask = True
@@ -480,9 +488,11 @@ def build_clips(path: Path, prm: DatasetParams, ctx: lv.Ctx, store=None,
                 audio: tuple[np.ndarray, int] | None = None) -> tuple[list[Clip], Source]:
     """Analyze a file and return its clips and the analysis (for later editing)."""
     src = analyze_source(path, prm, ctx, store, audio)
-    if not src.words:
+    if not src.words and not prm.pre_cut:
         ctx.log(f"{path.name}: no words detected", 1)
         return [], src
+    if not src.words:   # a pre-cut clip without words is kept in the list, excluded as "no text"
+        ctx.log(f"{path.name}: no words detected", 1)
     clips = detect_clips(src, prm)
     if not getattr(src, "pause_from_mask", True):
         ctx.log(f"{path.name}: the voice has no clean silences (music or noise under it): pauses taken from "

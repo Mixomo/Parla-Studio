@@ -188,6 +188,8 @@ Add one or more recordings and press **Analyze and cut**. For each file the pipe
 
 Clips fall between the minimum and maximum duration. Cuts prefer sentence ends and land at the energy minimum of each silence.
 
+**Clips already cut: only transcribe** (off by default): for recordings you already cut yourself. Each file becomes one clip, whole and as you cut it. It is only transcribed (steps 1–4); there is no alignment, SAVA, trimming or segmentation, and the duration limits don't exclude it. The clip can still be edited, split or merged like any other.
+
 **Editing clips:** drag a clip on the waveform to move it or pull its edges, double-click the text to correct it, **X** (or **Include / exclude**) includes / excludes the selected clips (with several selected: if any is excluded, all are included; otherwise all are excluded), **Include all** brings back every excluded clip and **Del** deletes the selected clips. **New clip** adds one at the playhead. Select several clips with **Ctrl+click** or **Shift+click** and press **Merge clips** (**Ctrl+M**) to join them into one: from the first start to the last end, with the transcript of the whole span (texts corrected by hand are joined in order). Clips lying between them are absorbed. Undo with Ctrl+Z. Selected clips are marked on the waveform with white edges; Ctrl+click or Shift+click a region on the waveform adds it to the selection or takes it out. **Split at playhead** (**S**) cuts the clip under the playhead in two, each with its own words (a hand-corrected text is split at the same word). **Autoplay clips**, above the clip list, plays a clip as soon as it is selected; it never fires while building a multiple selection.
 
 **Forced aligners:**
